@@ -41,6 +41,8 @@ sequences <-  readr::read_csv(
   show_col_types = FALSE)
 ```
 
+\newpage
+
 ### Integrar e organizar informações
 ```{r}
 dados <- deployments %>%
@@ -87,6 +89,7 @@ dados$Especie <- gsub("Didelphis marsupialis","Didelphis aurita",
 ```
 
 ### Exportar arquivos `*.csv`
+
 ```{r}
 readr::write_csv(dados, here("03_dadosDeSaida", "sinteseCamTrapsPELDCCM.csv"))
 ```
