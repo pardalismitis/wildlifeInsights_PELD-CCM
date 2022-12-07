@@ -1,0 +1,92 @@
+---
+title: "Organização"
+output:
+  pdf_document: default
+  html_notebook: default
+---
+
+Limpeza de dados de armadilhas fotográficas PELD - CCM.
+
+Desenvolvimento: Fernando Lima, D.Sc.
+
+## PREPARAÇÃO
+
+### PACOTES
+
+```{r pacotes, message=FALSE}
+rm(list = ls(all = TRUE))
+source("../funcoes/pacotes.R")
+pacotes("here", "readr", "dplyr")
+```
+
+### Carregar arquivos
+
+Arquivos baixados da plataforma Wildlife Insights
+
+```{r leitura, warning=FALSE}
+cameras <-  readr::read_csv(
+  here("01_dadosDeEntrada", "cameras.csv"),
+  show_col_types = FALSE)
+
+deployments <-  readr::read_csv(
+  here("01_dadosDeEntrada", "deployments.csv"),
+  show_col_types = FALSE)
+
+projects <-  readr::read_csv(
+  here("01_dadosDeEntrada", "projects.csv"),
+  show_col_types = FALSE)
+
+sequences <-  readr::read_csv(
+  here("01_dadosDeEntrada", "sequences.csv"),
+  show_col_types = FALSE)
+```
+
+### Integrar e organizar informações
+```{r}
+dados <- deployments %>%
+  dplyr::left_join(
+    sequences, by = "deployment_id"
+    ) %>%
+  # filtrar identificações a nível de espécie
+  dplyr::filter(
+    !is.na(species)
+  ) %>%
+  # juntar gênero e espécie para nome científico
+  dplyr::mutate(
+    especie = paste(genus, species)
+    ) %>%
+  # selecionar dados que o Miltinho pediu
+  dplyr::select(
+    subproject_name, placename,family,especie
+    ) %>%
+  # agrupar espécies e plotar número de registros
+  dplyr::group_by(
+    subproject_name, placename, family, especie
+    ) %>%
+  dplyr::summarise(
+    n = n()
+    ) %>%
+  # filtrar registros não identificados
+  dplyr::filter(
+    especie != "No CV Result No CV Result"
+    ) %>%
+  # renomear
+  dplyr::rename(
+          ID_Paisagem = subproject_name,
+          ID_Sitio = placename,
+          Familia = family,
+          Especie = especie,
+          NuRegistros = n)
+
+#checagem
+sort(unique(dados$Especie))
+
+dados$Especie <- gsub("Didelphis marsupialis","Didelphis aurita",
+                          dados$Especie)
+
+```
+
+### Exportar arquivos `*.csv`
+```{r}
+readr::write_csv(dados, here("03_dadosDeSaida", "sinteseCamTrapsPELDCCM.csv"))
+```
