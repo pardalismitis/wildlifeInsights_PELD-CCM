@@ -66,6 +66,13 @@ dados <- deployments %>%
   ) %>%
   dplyr::mutate(
     subproject_name = str_replace(subproject_name, "PAISAGEM ", "L")
+  ) %>%
+  dplyr::rename(
+          ID_Landscape = subproject_name,
+          ID_SamplingPoint = placename
+          ) %>%
+  dplyr::select(
+    ID_Landscape, ID_SamplingPoint, everything()
   )
 ```
 
@@ -78,10 +85,12 @@ timeLapse <- timeLapse[!grepl("Chiroptera", timeLapse$Species),]
 
 timeLapse <- timeLapse %>%
   mutate(
-    subproject_name = substr(RelativePath, 1, 3)
+    ID_Landscape = substr(RelativePath, 1, 3)
   ) %>%
   mutate(
-    
+    ID_SamplingPoint = substr(RelativePath, 4, 7)
+  ) %>%
+  select(ID_Landscape, ID_SamplingPoint, everything()
   )
 sort(unique(timeLapse$Species))
 ```
