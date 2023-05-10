@@ -24,25 +24,20 @@ pacotes("here", "readr", "dplyr", "stringr")
 Arquivos baixados da plataforma Wildlife Insights
 
 ```{r leitura, warning=FALSE}
-cameras <-  readr::read_csv(
-  here("01_dadosDeEntrada", "cameras.csv"),
-  show_col_types = FALSE)
+read_csv_file <- function(filename) {
+  readr::read_csv(
+    here(
+      "01_dadosDeEntrada", filename
+      ),
+    show_col_types = FALSE
+    )
+}
 
-deployments <-  readr::read_csv(
-  here("01_dadosDeEntrada", "deployments.csv"),
-  show_col_types = FALSE)
-
-projects <-  readr::read_csv(
-  here("01_dadosDeEntrada", "projects.csv"),
-  show_col_types = FALSE)
-
-sequences <-  readr::read_csv(
-  here("01_dadosDeEntrada", "sequences.csv"),
-  show_col_types = FALSE)
-
-timeLapse <- readr::read_csv(
-  here("01_dadosDeEntrada", "templatePELDCCM.csv"),
-  show_col_types = FALSE)
+cameras <- read_csv_file("cameras.csv")
+deployments <- read_csv_file("deployments.csv")
+projects <- read_csv_file("projects.csv")
+sequences <- read_csv_file("sequences.csv")
+timeLapse <- read_csv_file("templatePELDCCM.csv")
 ```
 
 \newpage
@@ -59,12 +54,8 @@ dados <- deployments %>%
   ) %>%
   # juntar gênero e espécie para nome científico
   dplyr::mutate(
-    especie = paste(genus, species)
-    ) %>%
-  dplyr::mutate(
-    placename = substr(deployment_id, 1,4)
-  ) %>%
-  dplyr::mutate(
+    especie = paste(genus, species),
+    placename = substr(deployment_id, 1,4),
     subproject_name = str_replace(subproject_name, "PAISAGEM ", "L")
   ) %>%
   dplyr::rename(
@@ -77,21 +68,25 @@ dados <- deployments %>%
 ```
 
 ```{r}
-timeLapse <- timeLapse[!grepl("Disparo falso", timeLapse$Species),]
-timeLapse <- timeLapse[!grepl("Não identificado", timeLapse$Species),]
-timeLapse <- timeLapse[!grepl("Disparo falso", timeLapse$Species),]
-timeLapse <- timeLapse[!grepl("Não listado", timeLapse$Species),]
-timeLapse <- timeLapse[!grepl("Chiroptera", timeLapse$Species),]
+# Remove unwanted species
+species_to_remove <- c(
+  "Disparo falso",
+  "Não identificado",
+  "Disparo falso",
+  "Não listado",
+  "Chiroptera"
+  )
+timeLapse <- timeLapse[!timeLapse$Species %in% species_to_remove,]
 
+# Extract IDs from RelativePath column
 timeLapse <- timeLapse %>%
   mutate(
-    ID_Landscape = substr(RelativePath, 1, 3)
-  ) %>%
-  mutate(
+    ID_Landscape = substr(RelativePath, 1, 3),
     ID_SamplingPoint = substr(RelativePath, 4, 7)
   ) %>%
   select(ID_Landscape, ID_SamplingPoint, everything()
   )
+
 sort(unique(timeLapse$Species))
 ```
 
