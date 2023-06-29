@@ -46,6 +46,54 @@ sequences <-  readr::read_csv(
 ### Integrar e organizar informações
 ```{r}
 dados <- deployments %>%
+  # juntar "deployments" com "sequences"
+  dplyr::left_join(
+    sequences, by = "deployment_id"
+    ) %>%
+  # filtrar identificações a nível de espécie
+  dplyr::filter(
+    !is.na(species)
+  ) %>%
+  # juntar gênero e espécie para nome científico
+  dplyr::mutate(
+    especie = paste(genus, species)
+    ) %>%
+  # selecionar apenas colunas necessárias
+  dplyr::select(
+    subproject_name,
+    placename,
+    longitude,
+    latitude,
+    start_date,
+    end_date,
+    identified_by,
+    class,
+    order,
+    family,
+    genus,
+    especie
+    ) %>%
+  # remover registros seres humanos
+  dplyr::filter(
+    especie != "Homo sapiens"
+    ) %>%
+  dplyr::rename(
+          ID_Paisagem = subproject_name,
+          ID_Sitio = placename,
+          Familia = family,
+          Especie = especie
+          )
+
+# checar nomes das espécies
+sort(unique(dados$especie))
+# correção
+dados$especie <- gsub("Micrastur gilvicollis","Micrastur mintoni",
+                          dados$especie)
+```
+
+### Integrar e organizar informações
+```{r}
+dados <- deployments %>%
   dplyr::left_join(
     sequences, by = "deployment_id"
     ) %>%
