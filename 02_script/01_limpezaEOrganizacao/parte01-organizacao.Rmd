@@ -1,5 +1,6 @@
 ---
-title: "Organização"
+title: "Organização e Padronização de Dados de Armadilhas Fotográficas"
+author: "Desenvolvimento: Fernando Lima, D.Sc."
 output:
   pdf_document: default
   html_notebook: default
@@ -13,40 +14,69 @@ Desenvolvimento: Fernando Lima, D.Sc.
 
 ### PACOTES
 
-```{r pacotes, message=FALSE}
+```{r pacotes, echo=FALSE}
 rm(list = ls(all = TRUE))
 source("../funcoes/pacotes.R")
-pacotes("here", "readr", "dplyr")
+pacotes("here", "readr", "dplyr", "stringr", "reshape")
 ```
 
-### Carregar arquivos
+### CARREGAR ARQUIVOS
 
-Arquivos baixados da plataforma Wildlife Insights
+-   Arquivos de triagem da plataforma Wildlife Insights
 
-```{r leitura, warning=FALSE}
-cameras <-  readr::read_csv(
-  here("01_dadosDeEntrada", "cameras.csv"),
-  show_col_types = FALSE)
+-   Arquivos de triagem do Timelapse
 
-deployments <-  readr::read_csv(
-  here("01_dadosDeEntrada", "deployments.csv"),
-  show_col_types = FALSE)
+-   Variáveis da paisagem:
 
-projects <-  readr::read_csv(
-  here("01_dadosDeEntrada", "projects.csv"),
-  show_col_types = FALSE)
+    -   Proporção de cobertura florestal raio de 1 km
 
-sequences <-  readr::read_csv(
-  here("01_dadosDeEntrada", "sequences.csv"),
-  show_col_types = FALSE)
+    -   Proporção de cobertura florestal raio de 2 km
+
+    -    Distância da borda
+
+# Variáveis da paisagem geradas em D:\\Dropbox\\SIG\\PROJETOS\\CANTAREIRA\\cantareiraLEEC\\camTraps.mxd
+
+```{r leitura, warning=FALSE, echo=FALSE}
+#Função para carregar aquivos
+read_csv_file <- function(filename) {
+  readr::read_csv(
+    here(
+      "01_dadosDeEntrada", filename
+      ),
+    show_col_types = FALSE
+    )
+}
+
+# Função para carregar arquivos UT8
+read_csv_file2 <- function(filename) {
+  readr::read_csv2(
+    here(
+      "01_dadosDeEntrada", filename
+      ),
+    show_col_types = FALSE
+    )
+}
+
+# Dados Wildlife Insights
+cameras <- read_csv_file("cameras.csv")
+deployments <- read_csv_file("deployments.csv")
+projects <- read_csv_file("projects.csv")
+sequences <- read_csv_file("sequences.csv")
+# Dados do Timelapse
+timeLapse <- read_csv_file("templatePELDCCM.csv")
+# Variáveis ambientais
+distBordaCobertura <- read_csv_file2("landscapeVariables.txt")
 ```
 
 \newpage
 
-### Integrar e organizar informações
-```{r}
-dados <- deployments %>%
-  # juntar "deployments" com "sequences"
+### INTEGRAR E ORGANIZAR INFORMAÇÕES - ARMADILHAS FOTOGRÁFICAS
+
+#### Carregar dados do Wildlife Insights
+
+```{r insights}
+insights <- deployments %>%
+  # Juntar dados de amostragem com os registros
   dplyr::left_join(
     sequences, by = "deployment_id"
     ) %>%
@@ -54,68 +84,225 @@ dados <- deployments %>%
   dplyr::filter(
     !is.na(species)
   ) %>%
-  # juntar gênero e espécie para nome científico
   dplyr::mutate(
-    especie = paste(genus, species)
-    ) %>%
-  # selecionar apenas colunas necessárias
-  dplyr::select(
-    subproject_name,
-    placename,
-    longitude,
-    latitude,
-    start_date,
-    end_date,
-    identified_by,
-    class,
-    order,
-    family,
-    genus,
-    especie
-    ) %>%
-  # remover registros seres humanos
-  dplyr::filter(
-    especie != "Homo sapiens"
-    ) %>%
+    # juntar gênero e espécie para nome científico
+    Species = paste(genus, species),
+    # criar coluna com nome do ponto
+    placename = substr(deployment_id, 1,4),
+    # ajustar código de paisagem
+    subproject_name = str_replace(subproject_name, "PAISAGEM ", "L"),
+    # criar identificador
+    id = paste(subproject_name, placename)
+  ) %>%
   dplyr::rename(
-          ID_Paisagem = subproject_name,
-          ID_Sitio = placename,
-          Familia = family,
-          Especie = especie
-          )
-
-# checar nomes das espécies
-sort(unique(dados$especie))
-# correção
-dados$especie <- gsub("Micrastur gilvicollis","Micrastur mintoni",
-                          dados$especie)
+          ID_Landscape = subproject_name,
+          ID_SamplingPoint = placename,
+          DateTime = start_time,
+          Family = family
+          ) %>%
+  dplyr::select(
+    id, ID_Landscape, ID_SamplingPoint, DateTime, Family, Species
+  )
 ```
 
-### Integrar e organizar informações
+#### Carregar dados do Timelapse
+
+```{r timelapse}
+# Extraia IDs da coluna RelativePath
+timeLapse <- timeLapse %>% 
+  mutate(
+    # Remova "_" de RelativePath
+    RelativePath = str_replace_all(RelativePath, "_", ""),
+    # Remova "\\100EK113" de RelativePath
+    RelativePath = str_remove_all(RelativePath, "\\\\100EK113"),
+    # Remova "\\101EK113" de RelativePath
+    RelativePath = str_remove_all(RelativePath, "\\\\101EK113"),
+    # Extraia os 3 primeiros caracteres de RelativePath e coloque em uma coluna chamada ID_Landscape
+    ID_Landscape = substr(RelativePath, 1, 3),
+    # Extraia os caracteres de 4 a 7 de RelativePath e coloque em uma coluna chamada ID_SamplingPoint
+    ID_SamplingPoint = substr(RelativePath, 4, 7),
+    # crie o identificador
+    id = paste(ID_Landscape, ID_SamplingPoint),
+    Family = NA
+  ) %>% 
+  select(id, ID_Landscape, ID_SamplingPoint, DateTime, Family, Species)
+```
+
+#### Integrar dados do Timelapse e Wildlife Insights
+
 ```{r}
-dados <- deployments %>%
-  dplyr::left_join(
-    sequences, by = "deployment_id"
-    ) %>%
-  # filtrar identificações a nível de espécie
-  dplyr::filter(
-    !is.na(species)
-  ) %>%
-  # juntar gênero e espécie para nome científico
-  dplyr::mutate(
-    especie = paste(genus, species)
-    ) %>%
-  # selecionar dados que o Miltinho pediu
+dataCamTraps <- rbind(timeLapse, insights)
+
+# Lista de registros irrelevantes
+species_to_remove <- c(
+  "Disparo falso",
+  "Não identificado",
+  "Disparo falso",
+  "Não listado",
+  "Chiroptera",
+  "Ave",
+  "Homo sapiens",
+  "Marsupial",
+  "Roedor",
+  "Odontophorus capueira",
+  "No CV Result No CV Result",
+  "Sapajus nigritus",
+  "Tinamus major",
+  "Dasypus septemcinctus"
+  )
+# Remova registros irrelevantes
+dataCamTraps <- dataCamTraps[!dataCamTraps$Species %in% species_to_remove,]
+```
+
+#### Adicionar dados taxonômicos de família
+
+```{r}
+dataCamTraps <- dataCamTraps %>%
+  mutate(
+    Species = if_else(Species == "", "Leopardus pardalis", Species),
+    Family = case_when(
+      Species == "Bos taurus" ~ "Bovidae",
+      Species == "Cabassous tatouay" ~ "Chlamyphoridae",
+      Species == "Cuniculus paca" ~ "Cuniculidae",
+      Species == "Dasypus novemcinctus" ~ "Dasypodidae",
+      Species == "Didelphis aurita" ~ "Didelphidae",
+      Species == "Eira barbara" ~ "Mustelidae",
+      Species == "Hydrochoerus hydrochaeris" ~ "Caviidae",
+      Species == "Mazama sp." ~ "Cervidae",
+      Species == "Pecari tajacu" ~ "Tayassuidae",
+      Species == "Sus scrofa" ~ "Suidae",
+      Species %in% c(
+        "Canis familiaris",
+        "Cerdocyon thous"
+        ) ~ "Canidae",
+      Species %in% c(
+        "Lepus europaeus",
+        "Sylvilagus brasiliensis"
+        ) ~ "Leporidae",
+      Species %in% c(
+        "Nasua nasua",
+        "Procyon cancrivorus"
+        ) ~ "Procyonidae",
+      Species %in% c(
+        "Leopardus pardalis",
+        "Leopardus guttulus",
+        "Leopardus sp.",
+        "Herpailurus yagouaroundi",
+        "Felis catus",
+        "Puma concolor",
+        "Leopardus wiedii"
+        ) ~ "Felidae",
+      
+      TRUE ~ Family
+    )
+  )
+```
+
+### MÉTRICAS DA PAISAGEM
+
+```{r}
+distBordaCobertura <- distBordaCobertura %>%
   dplyr::select(
-    subproject_name, placename,family,especie
+    PONTO,
+    distBorda,
+    fs1km,
+    fs2km
     ) %>%
+  dplyr::mutate(
+    # corrigir ponto com dígito errado
+    PONTO = gsub(
+      "P017-C053",
+      "P117-C053",
+      PONTO
+      ),
+    # adicionar identificação de paisagem a partir do número do ponto
+    ID_Landscape = case_when(
+     PONTO %in% c(
+       "P045-C029",
+       "P046-C103"
+       ) ~ "L01",
+     PONTO %in% c(
+       "P093-C063",
+       "P094-C70",
+       "P096-C121",
+       "P098-C026",
+       "P099-C068",
+       "P100-C044"
+       ) ~ "L07",
+     PONTO %in% c(
+       "P102-C102",
+       "P104-C026",
+       "P105-C160",
+       "P106-C054"
+       ) ~ "L10",
+     PONTO %in% c(
+       "P081-C010",
+       "P083-C055",
+       "P084-C105",
+       "P085-C064",
+       "P086-C070",
+       "P090-C151"
+       ) ~ "L12",
+     PONTO %in% c(
+       "P149-C035",
+       "P150-C107",
+       "P151-C109",
+       "P152-C078",
+       "P153-C117",
+       "P155-C077",
+       "P157-C170",
+       "P158-C079"
+       ) ~ "L13",
+     PONTO %in% c(
+       "P190-C085",
+       "P191-C161",
+       "P192-C065",
+       "P193-C023",
+       "P194-C203",
+       "P1950-C033",
+       "P196-C052",
+       "P197-C114"
+       ) ~ "L16",
+     PONTO %in% c(
+       "P053-C162",
+       "P054-C201",
+       "P055-C063",
+       "P056-C068",
+       "P059-C064",
+       "P060_C060"
+       ) ~ "L17",
+     PONTO == "P168-C117" ~ "L03",
+     PONTO == "P036-170" ~ "L04",
+     PONTO == "P117-C053" ~ "L15"
+     ),
+  # criar identificador do ponto
+  ID_SamplingPoint = substr(PONTO, 1, 4)
+  ) %>%
+  # selecionar apenas pontos com registros
+  dplyr::filter(
+    !is.na(ID_Landscape)
+  ) %>%
+  dplyr::select(
+    ID_Landscape,
+    ID_SamplingPoint,
+    fs1km,
+    fs2km,
+    distBorda
+  )
+```
+
+### COMBINAR DADOS DE PAISAGEM X OCORRÊNCIAS DE ESPÉCIES
+
+```{r}
+# Agrupar os registros por ponto
+dataCamTraps1 <- dataCamTraps %>%
   # agrupar espécies e plotar número de registros
   dplyr::group_by(
-    subproject_name, placename, family, especie
+    ID_Landscape, ID_SamplingPoint, Species
     ) %>%
   dplyr::summarise(
     n = n()
-    ) %>%
+    ) #%>%
   # filtrar registros não identificados
   dplyr::filter(
     especie != "No CV Result No CV Result"
@@ -128,18 +315,67 @@ dados <- deployments %>%
           Especie = especie,
           NuRegistros = n)
 
-#checagem
-sort(unique(dados$Especie))
+# Transpor os dados
+dataCamtraps2 <- reshape::cast(dataCamTraps1, ID_Landscape+ID_SamplingPoint~Species)
 
-sort(unique(dados$ID_Sitio))
+# Criar id
+distBordaCobertura <- distBordaCobertura %>%
+  mutate(
+    id = paste(ID_Landscape, ID_SamplingPoint)
+  )
 
-dados$Especie <- gsub("Didelphis marsupialis","Didelphis aurita",
-                          dados$Especie)
+# Criar id
+dataCamtraps2 <- dataCamtraps2 %>%
+  mutate(
+    id = paste(ID_Landscape, ID_SamplingPoint)
+  )
 
+# Combinar dados de paisagem e ocorrência de espécies
+PELD_camTraps <- distBordaCobertura %>%
+  dplyr::left_join(
+    dataCamtraps2, by = "id"
+    ) %>%
+  select(
+    -ID_Landscape.x,
+    -ID_SamplingPoint.x
+  ) %>%
+  relocate(
+    id,
+    ID_Landscape.y,
+    ID_SamplingPoint.y
+  )
+```
+
+### SÍNTESE DOS REGISTROS
+
+```{r}
+dataCamTrapsSintese <- dataCamTraps %>%
+  # selecionar dados relevantes
+  dplyr::select(
+    ID_Landscape, ID_SamplingPoint, Family, Species
+    ) %>%
+  # agrupar espécies e plotar número de registros
+  dplyr::group_by(
+    ID_Landscape, ID_SamplingPoint, Family, Species
+    ) %>%
+  dplyr::summarise(
+    n = n()
+    ) %>%
+  # renomear
+  dplyr::rename(
+          NuRegistros = n)
 ```
 
 ### Exportar arquivos `*.csv`
 
 ```{r}
-readr::write_csv(dados, here("03_dadosDeSaida", "sinteseCamTrapsPELDCCM.csv"))
+readr::write_csv(dataCamTrapsSintese, here(
+  "03_dadosDeSaida", "sinteseCamTrapsPELDCCM.csv"
+  )
+  )
+
+readr::write_csv(PELD_camTraps, here(
+  "03_dadosDeSaida", "camTrapsPELDCCM_metricas.csv"
+  )
+  )
 ```
